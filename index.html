@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>車牌辨識系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+        video {
+            width: 100%;
+            height: auto;
+        }
+        #result, #recognizedVideo {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 18px;
+            color: #333;
+        }
+        #outputTable {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        #outputTable th, #outputTable td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        #outputTable th {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>車牌辨識系統</h2>
+        <button id="startCamera">打開攝像頭</button>
+        <div id="cameraControls" style="display:none;">
+            <video id="video" autoplay playsinline></video>
+            <button id="switchToFrontCamera">前攝像頭</button>
+            <button id="switchToBackCamera">後攝像頭</button>
+        </div>
+        <div id="result"></div>
+        <div id="recognizedVideo"></div>
+        <table id="outputTable">
+            <thead>
+                <tr>
+                    <th>照片</th>
+                    <th>車牌號碼</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        let video = document.getElementById('video');
+        let currentStream;
+        let facingMode = "environment";  // 默認為後攝像頭
+
+        document.getElementById('startCamera').addEventListener('click', () => {
+            startCamera();
+            document.getElementById('cameraControls').style.display = 'block';
+        });
+
+        document.getElementById('switchToFrontCamera').addEventListener('click', () => {
+            facingMode = "user";
+            startCamera();
+        });
+
+        document.getElementById('switchToBackCamera').addEventListener('click', () => {
+            facingMode = "environment";
+            startCamera();
+        });
+
+        function startCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode } })
+            .then(stream => {
+                currentStream = stream;
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    console.log("Camera stream started");
+                    detectPlates();
+                };
+            })
+            .catch(err => {
+                console.error('Error accessing camera: ', err);
+            });
+        }
+
+        function detectPlates() {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+
+            setInterval(() => {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/jpeg');
+
+                fetch('/recognize', {
+                    method: 'POST',
+                    body: JSON.stringify({ image: imageData }),
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.plateNumber && data.plateNumber !== "未識別到車牌") {
+                        var resultElement = document.getElementById('result');
+                        resultElement.innerHTML = "<img src='data:image/jpeg;base64," + data.image + "' alt='識別結果'>";
+                        var recognizedVideoElement = document.getElementById('recognizedVideo');
+                        recognizedVideoElement.innerHTML = "<img src='data:image/jpeg;base64," + data.image + "' alt='識別結果'>";
+                        var table = document.getElementById('outputTable').getElementsByTagName('tbody')[0];
+                        var newRow = table.insertRow();
+                        var cell1 = newRow.insertCell(0);
+                        var cell2 = newRow.insertCell(1);
+                        var cell3 = newRow.insertCell(2);
+                        cell1.innerHTML = "<img src='data:image/jpeg;base64," + data.image + "' alt='識別結果' style='max-width:100px;'>";
+                        cell2.textContent = data.plateNumber;
+                        cell3.innerHTML = "<button onclick='removeRow(this)'>移除</button>";
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            }, 1000);  // 每1秒截圖並傳至後端
+        }
+
+        function removeRow(button) {
+            var row = button.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+        }
+    </script>
+</body>
+</html>
