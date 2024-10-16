@@ -5,6 +5,7 @@ easyocr==1.7.2
 filelock==3.16.1
 Flask==3.0.3
 fsspec==2024.9.0
+gunicorn==23.0.0
 imageio==2.36.0
 itsdangerous==2.2.0
 Jinja2==3.1.4
